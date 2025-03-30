@@ -2416,7 +2416,9 @@ GET http://127.0.0.1:8000/execute?q={query.replace(" ", "%20")}
         return f"Error parsing function call: {str(e)}"
 
 
-async def get_delhi_bounding_box() -> str:
+import requests
+
+def get_delhi_bounding_box() -> str:
     """
     Get the minimum latitude of Delhi, India using the Nominatim API
 
@@ -2424,10 +2426,6 @@ async def get_delhi_bounding_box() -> str:
         Information about Delhi's bounding box
     """
     try:
-        import httpx
-        import json
-        import asyncio  # Make sure this import is present
-
         # Nominatim API endpoint
         url = "https://nominatim.openstreetmap.org/search"
 
@@ -2442,37 +2440,33 @@ async def get_delhi_bounding_box() -> str:
         # Headers to identify our application (required by Nominatim usage policy)
         headers = {"User-Agent": "LocationDataRetriever/1.0"}
 
-        async with httpx.AsyncClient() as client:
-            # Add a small delay to respect rate limits
-            await asyncio.sleep(1)
+        # Make the request
+        response = requests.get(url, params=params, headers=headers)
+        response.raise_for_status()
+        results = response.json()
 
-            # Make the request
-            response = await client.get(url, params=params, headers=headers)
-            response.raise_for_status()
-            results = response.json()
+        if not results:
+            return "No results found for Delhi, India"
 
-            if not results:
-                return "No results found for Delhi, India"
+        # Find the correct Delhi (capital city)
+        delhi = None
+        for result in results:
+            if "New Delhi" in result.get("display_name", ""):
+                delhi = result
+                break
 
-            # Find the correct Delhi (capital city)
-            delhi = None
-            for result in results:
-                if "New Delhi" in result.get("display_name", ""):
-                    delhi = result
-                    break
+        # If we didn't find New Delhi specifically, use the first result
+        if not delhi and results:
+            delhi = results[0]
 
-            # If we didn't find New Delhi specifically, use the first result
-            if not delhi and results:
-                delhi = results[0]
+        if delhi and "boundingbox" in delhi:
+            # Extract the minimum latitude from the bounding box
+            min_lat = delhi["boundingbox"][0]
 
-            if delhi and "boundingbox" in delhi:
-                # Extract the minimum latitude from the bounding box
-                min_lat = delhi["boundingbox"][0]
-
-                # Return just the minimum latitude value
-                return min_lat
-            else:
-                return "Bounding box information not available for Delhi"
+            # Return just the minimum latitude value
+            return min_lat
+        else:
+            return "Bounding box information not available for Delhi"
 
     except Exception as e:
         return f"Error retrieving Delhi bounding box: {str(e)}"
